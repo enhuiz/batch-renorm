@@ -9,15 +9,15 @@ from tqdm import tqdm
 from collections import defaultdict
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.datasets import MNIST
+from torchvision.datasets import MNIST, CIFAR100
 
 from .bns import BN, BNRS, BRN
 
 
 class Model(nn.Sequential):
-    def __init__(self, Norm):
+    def __init__(self, in_channels, num_classes, Norm):
         super().__init__(
-            nn.Conv2d(1, 32, 3, padding=1),
+            nn.Conv2d(in_channels, 32, 3, padding=1),
             Norm(32),
             nn.GELU(),
             nn.Conv2d(32, 32, 3, dilation=2, padding=2),
@@ -31,7 +31,7 @@ class Model(nn.Sequential):
             nn.GELU(),
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(1),
-            nn.Linear(32, 10),
+            nn.Linear(32, num_classes),
         )
 
 
@@ -53,20 +53,32 @@ def main():
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--test-batch-size", type=int, default=4096)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--test-every", type=int, default=500)
     parser.add_argument("--log-every", type=int, default=50)
     parser.add_argument("--dataset", type=str, default="MNIST")
     args = parser.parse_args()
 
-    train_ds = MNIST(
+    if args.dataset == "MNIST":
+        Dataset = MNIST
+        in_channels = 1
+        num_classes = 10
+        lr = 1e-3
+    elif args.dataset == "CIFAR100":
+        Dataset = CIFAR100
+        in_channels = 3
+        num_classes = 100
+        lr = 1e-3
+    else:
+        raise NotImplementedError(args.dataset)
+
+    train_ds = Dataset(
         "data",
         train=True,
         download=True,
         transform=transforms.ToTensor(),
     )
 
-    test_ds = MNIST(
+    test_ds = Dataset(
         "data",
         train=False,
         download=True,
@@ -90,14 +102,14 @@ def main():
     del train_ds, test_ds
 
     Norms = [BN, BRN, BNRS]
-    models = [Model(Norm).to(args.device) for Norm in Norms]
+    models = [Model(in_channels, num_classes, Norm).to(args.device) for Norm in Norms]
 
     # Eliminate the effect of normalization
     for model in models[1:]:
         model.load_state_dict(models[0].state_dict())
 
     model = Ensemble(models)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     training_loss_curves = defaultdict(list)
     test_acc_curves = defaultdict(list)
@@ -155,13 +167,14 @@ def main():
             for j, m in enumerate(Norms):
                 plt.plot(test_acc_curves[j], label=m.__name__)
             plt.xlabel(f"x{args.test_every} iterations")
-            plt.ylim(0.75, 1.0)
+            if args.dataset == "MNIST":
+                plt.ylim(0.75, 1.0)
             plt.legend()
             plt.tight_layout()
 
             path = Path(
                 "results",
-                f"curves-bn-{args.batch_size}-data-{args.dataset}.png",
+                f"bs-{args.batch_size}-dataset-{args.dataset}.png",
             )
             plt.savefig(path)
             plt.clf()
