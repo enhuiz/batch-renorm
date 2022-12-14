@@ -3,7 +3,7 @@ from torch import nn, Tensor
 
 
 class BN(nn.Module):
-    def __init__(self, dim, momentum=0.1, eps=1e-5):
+    def __init__(self, dim, momentum=0.1, eps=0):
         super().__init__()
         self.momentum = momentum
         self.eps = eps
@@ -24,8 +24,8 @@ class BN(nn.Module):
         mean = x.mean(dim=dims)
         # PyTorch uses unbiased var for running_var update
         var = x.var(dim=dims, unbiased=True)
-        self.running_mean = self._ema(self.running_mean, mean)
-        self.running_var = self._ema(self.running_var, var)
+        self.running_mean[:] = self._ema(self.running_mean, mean)
+        self.running_var[:] = self._ema(self.running_var, var)
 
     @staticmethod
     def _get_batch_stats(x):
@@ -87,6 +87,9 @@ class BRN(BN):
     """
 
     def _norm(self, x):
+        if not self.training:
+            return super()._norm(x)
+
         μb, σb2 = self._get_batch_stats(x)
         inv_σb = self._inv_sqrt(σb2)
 

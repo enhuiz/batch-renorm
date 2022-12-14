@@ -2,15 +2,16 @@ import torch
 import argparse
 import numpy as np
 import torch.nn.functional as F
-from torch import nn, Tensor
+import matplotlib.pyplot as plt
+from pathlib import Path
+from torch import nn
 from tqdm import tqdm
 from collections import defaultdict
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST
-from functorch import combine_state_for_ensemble, vmap
 
-from bns.bns import BN, BNRS, BRN
+from .bns import BN, BNRS, BRN
 
 
 class Model(nn.Sequential):
@@ -34,12 +35,30 @@ class Model(nn.Sequential):
         )
 
 
+class Ensemble(nn.ModuleList):
+    def forward(self, x):
+        ys = []
+        for model in self:
+            ys.append(model(x))
+        return ys
+
+
 def _loop_forever(dl):
     while True:
         yield from dl
 
 
-def run(args):
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--test-batch-size", type=int, default=4096)
+    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--test-every", type=int, default=500)
+    parser.add_argument("--log-every", type=int, default=50)
+    parser.add_argument("--dataset", type=str, default="MNIST")
+    args = parser.parse_args()
+
     train_ds = MNIST(
         "data",
         train=True,
@@ -63,7 +82,7 @@ def run(args):
 
     test_dl = DataLoader(
         test_ds,
-        batch_size=args.batch_size,
+        batch_size=args.test_batch_size,
         shuffle=False,
         drop_last=False,
     )
@@ -72,61 +91,80 @@ def run(args):
 
     Norms = [BN, BRN, BNRS]
     models = [Model(Norm).to(args.device) for Norm in Norms]
-    fmodel, params, buffers = combine_state_for_ensemble(models)
-    [p.requires_grad_() for p in params]
 
-    optimizer = torch.optim.Adam(params, lr=args.lr)
+    # Eliminate the effect of normalization
+    for model in models[1:]:
+        model.load_state_dict(models[0].state_dict())
 
-    def _repeat_to_device(x: Tensor):
-        return x[None].repeat_interleave(len(models), dim=0).to(args.device)
+    model = Ensemble(models)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    training_loss_curves = defaultdict(list)
+    test_acc_curves = defaultdict(list)
 
     for i, (x, y) in enumerate(_loop_forever(train_dl)):
-        x = _repeat_to_device(x)
+        if i > 10000:
+            break
+
+        x = x.to(args.device)
         y = y.to(args.device)
 
-        h = vmap(fmodel)(params, buffers, x)
+        hs = model(x)
 
         losses = []
 
-        for j, hj in enumerate(h):
-            loss = F.cross_entropy(hj, y)
+        for j, h in enumerate(hs):
+            loss = F.cross_entropy(h, y)
             losses.append(loss)
-            if (i * 10) % args.val_every == 0:
-                print(f"Iteration {i} Loss for Norm {Norms[j]}: {loss.item():.5g}")
+
+        if i % args.log_every == 0:
+            for j, loss in enumerate(losses):
+                print(f"Iteration {i}: Loss for Norm {Norms[j]}: {loss.item():.5g}.")
+                training_loss_curves[j].append(loss.item())
 
         optimizer.zero_grad()
         sum(losses).backward()
         optimizer.step()
 
-        if i % args.val_every == 0:
+        if i % args.test_every == 0:
+            model.eval()
             with torch.inference_mode():
-                fmodel.eval()
-
                 accs = defaultdict(list)
-                for x, y in (tqdm if args.verbose else lambda x: x)(test_dl):
-                    x = _repeat_to_device(x)
+                for x, y in tqdm(test_dl):
+                    x = x.to(args.device)
                     y = y.to(args.device)
-                    h = vmap(fmodel)(params, buffers, x)
-                    model_batch_accs = (h.argmax(dim=-1) == y).float().tolist()
-
-                    for j, batch_accs in enumerate(model_batch_accs):
-                        accs[j].extend(batch_accs)
-
+                    hs = model(x)
+                    for j, h in enumerate(hs):
+                        accs[j].extend((h.argmax(dim=-1) == y).cpu().numpy())
                 for j, v in accs.items():
-                    print(f"Accuracy of Norm {Norms[j]}: {np.mean(v):.4g}.")
+                    test_acc_curves[j].append(np.mean(v))
+                    print(f"Accuracy of Norm {Norms[j]}: {test_acc_curves[j][-1]:.4g}.")
+            model.train()
 
-                fmodel.train()
+            plt.subplot(121)
+            plt.title("Training Loss")
+            for j, m in enumerate(Norms):
+                plt.plot(training_loss_curves[j], label=m.__name__)
+            plt.yscale("log")
+            plt.xlabel(f"x{args.log_every} iterations")
+            plt.legend()
+            plt.tight_layout()
 
+            plt.subplot(122)
+            plt.title("Test Accuracy")
+            for j, m in enumerate(Norms):
+                plt.plot(test_acc_curves[j], label=m.__name__)
+            plt.xlabel(f"x{args.test_every} iterations")
+            plt.ylim(0.75, 1.0)
+            plt.legend()
+            plt.tight_layout()
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--device", type=str, default="mps")
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--val-every", type=int, default=1000)
-    parser.add_argument("--verbose", action="store_true")
-    args = parser.parse_args()
-    run(args)
+            path = Path(
+                "results",
+                f"curves-bn-{args.batch_size}-data-{args.dataset}.png",
+            )
+            plt.savefig(path)
+            plt.clf()
 
 
 if __name__ == "__main__":
