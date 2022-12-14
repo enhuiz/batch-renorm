@@ -1,4 +1,4 @@
-# Why don't we simply use running statistics for batch normalization training?
+# Why don't we simply use running statistics for batch normalization during training?
 
 This repository contains a study that compares the use of three different batch normalization methods (BN, BNRS, and BRN) on image classification datasets with small and large batch sizes.
 
