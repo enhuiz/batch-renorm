@@ -14,25 +14,25 @@ BNRS always uses running statistics during both training and inference, and only
 
 ### Method 3: [Batch ReNormalization (BRN)](https://arxiv.org/pdf/1702.03275.pdf)
 
-BRN appears to use running statistics in both training and inference but also utilizes the gradients of batch statistics during training.
+BRN appears to use running statistics in both training and inference, but it also employs the gradients of batch statistics during training.
 
 ## Results
 
 ### MNIST
 
-| Batch Size |                                         |
-| ---------- | --------------------------------------- |
-| 2          | ![](./results/bs-2-dataset-MNIST.png)   |
-| 16         | ![](./results/bs-16-dataset-MNIST.png)  |
-| 128        | ![](./results/bs-128-dataset-MNIST.png) |
+| BS=2                                  | 16                                     | 128                                     |
+| ------------------------------------- | -------------------------------------- | --------------------------------------- |
+| ![](./results/bs-2-dataset-MNIST.png) | ![](./results/bs-16-dataset-MNIST.png) | ![](./results/bs-128-dataset-MNIST.png) |
 
 ### CIFAR100
 
-| Batch Size |                                            |
-| ---------- | ------------------------------------------ |
-| 2          | ![](./results/bs-2-dataset-CIFAR100.png)   |
-| 16         | ![](./results/bs-16-dataset-CIFAR100.png)  |
-| 128        | ![](./results/bs-128-dataset-CIFAR100.png) |
+| BS=2                                     | 16                                        | 128                                        |
+| ---------------------------------------- | ----------------------------------------- | ------------------------------------------ |
+| ![](./results/bs-2-dataset-CIFAR100.png) | ![](./results/bs-16-dataset-CIFAR100.png) | ![](./results/bs-128-dataset-CIFAR100.png) |
+
+## Summary
+
+In general, BRN performs better than BN only when the batch size is small (e.g. 2) and the task is challenging (e.g. CIFAR100). Otherwise, it is best to simply use BN. BNRS, on the other hand, tends to converge much slower and should be avoided.
 
 # Credits
 
