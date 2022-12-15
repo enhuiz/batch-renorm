@@ -18,9 +18,9 @@ BRN appears to use running statistics in both training and inference, but it als
 
 ### Method 4: [Batch ReNormalization w/ Clipping (BRNC)](https://arxiv.org/pdf/1702.03275.pdf)
 
-BRNC is original version introduced in the Batch ReNormalization paper, with value clipping for $r$ and $d$.
+BRNC is the original version introduced in the Batch ReNormalization paper, with value clipping for $r$ and $d$.
 
-### Method 5: BatchNorm without Synchronization across devices (BRWoS)
+### Method 5: BatchNorm without synchronization across devices (BRWoS)
 
 BRWoS mimics the behavior of batch norm used with data parallel, where the batch stats is computed independently for each device and only the running stats on the first device will be kept to the end.
 
@@ -40,7 +40,7 @@ BRWoS mimics the behavior of batch norm used with data parallel, where the batch
 
 ## Summary
 
-In general, BRN(C) performs better than BN only when the batch size is small (e.g. 2) and the task is challenging (e.g. CIFAR100). Otherwise, it is best to simply use BN. BNRS tends to converge much slower and should be avoided. BNWoS can fail when batch size is small, but performs similiar to BN when the batch size is sufficiently large.
+In general, BRN(C) performs better than BN only when the batch size is small (e.g. 2) and the task is challenging (e.g. CIFAR100). Otherwise, it is best to simply use BN. BNRS tends to converge much slower and should be avoided. BNWoS can fail when batch size is small, but performs similarly to BN when the batch size is sufficiently large.
 
 # Credits
 
