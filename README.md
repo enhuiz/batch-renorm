@@ -40,9 +40,9 @@ BRWoS mimics the behavior of batch norm used with data parallel, where the batch
 
 ## Summary
 
-In general, BRN performs better than BN only when the batch size is small (e.g. 2) and the task is challenging (e.g. CIFAR100). Otherwise, it is best to simply use BN. BNRS, on the other hand, tends to converge much slower and should be avoided.
+In general, BRN(C) performs better than BN only when the batch size is small (e.g. 2) and the task is challenging (e.g. CIFAR100). Otherwise, it is best to simply use BN. BNRS tends to converge much slower and should be avoided. BNWoS can fail when batch size is small, but performs similiar to BN when the batch size is sufficiently large.
 
 # Credits
 
-- https://arxiv.org/pdf/1702.03275.pdf.
-- ChatGPT for refining the `README.md`.
+- https://arxiv.org/pdf/1702.03275.pdf
+- ChatGPT for refining the `README.md`
