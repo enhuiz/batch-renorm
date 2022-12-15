@@ -12,9 +12,17 @@ BN is the same as the PyTorch implementation and uses batch statistics for norma
 
 BNRS always uses running statistics during both training and inference, and only uses batch statistics to update running statistics without computing any gradients.
 
-### Method 3: [Batch ReNormalization (BRN)](https://arxiv.org/pdf/1702.03275.pdf)
+### Method 3: [Batch ReNormalization w/o Clipping (BRN)](https://arxiv.org/pdf/1702.03275.pdf)
 
-BRN appears to use running statistics in both training and inference, but it also employs the gradients of batch statistics during training.
+BRN appears to use running statistics in both training and inference, but it also employs the gradients of batch statistics during training. This version does not implement the value clipping for $r$ and $d$.
+
+### Method 4: [Batch ReNormalization w/ Clipping (BRNC)](https://arxiv.org/pdf/1702.03275.pdf)
+
+BRNC is original version introduced in the Batch ReNormalization paper, with value clipping for $r$ and $d$.
+
+### Method 5: BatchNorm without Synchronization across devices (BRWoS)
+
+BRWoS mimics the behavior of batch norm used with data parallel, where the batch stats is computed independently for each device and only the running stats on the first device will be kept to the end.
 
 ## Results
 
