@@ -2,7 +2,7 @@ import torch
 import traceback
 from torch import nn
 
-from .bns import BN, BNRS, BRN
+from .bns import BN, BNRS, BRN, BNWoS
 
 
 def _assert_close(a, b):
@@ -78,7 +78,28 @@ def test_brns_brn_1d():
     _assert_close(a(x), b(x))
 
 
+def test_bnwos():
+    a = BNWoS(3).train().cuda()
+    b = nn.DataParallel(BN(3).cuda(), device_ids=[0, 1]).train()
+
+    x = torch.randn(4, 3, 3, device="cuda")
+    _assert_close(a(x), b(x))
+
+    x = torch.randn(4, 3, 3, device="cuda")
+    _assert_close(a(x), b(x))
+
+    a.eval()
+    b.eval()
+
+    x = torch.randn(4, 3, 3, device="cuda")
+    _assert_close(a(x), b(x))
+
+    x = torch.randn(4, 3, 3, device="cuda")
+    _assert_close(a(x), b(x))
+
+
 if __name__ == "__main__":
     test_bn_1d()
     test_bn_2d()
     test_brns_brn_1d()
+    test_bnwos()

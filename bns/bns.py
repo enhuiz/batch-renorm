@@ -86,6 +86,10 @@ class BRN(BN):
     Not clipping for simplcity.
     """
 
+    @property
+    def clipping(self):
+        return False
+
     def _norm(self, x):
         if not self.training:
             return super()._norm(x)
@@ -102,4 +106,49 @@ class BRN(BN):
             r = σb2.sqrt() * inv_σ
             d = (μb - μ) * inv_σ
 
+        if self.clipping:
+            # rmax = 3
+            r = r.clamp(1 / 3, 3)
+            # dmax = 5
+            d = d.clamp(-5, 5)
+
         return r * x + d
+
+
+class BRNC(BRN):
+    """
+    Batch renormalization, with clipping.
+    """
+
+    @property
+    def clipping(self):
+        return True
+
+
+class BNWoS(BN):
+    """
+    A BN without proper synchronization across devices.
+    This simulates the buggy BN when using DataPrallel,
+    i.e. running stats only updates according to the
+    samples on device 0.
+
+    https://github.com/pytorch/pytorch/issues/1051
+
+    Assume there is two devices (hardcoded)
+    """
+
+    @torch.no_grad()
+    def _update_stats(self, x: Tensor):
+        x = x.chunk(2, dim=1)[0]
+        dims = [i for i in range(x.dim()) if i > 0]
+        mean = x.mean(dim=dims)
+        # PyTorch uses unbiased var for running_var update
+        var = x.var(dim=dims, unbiased=True)
+        self.running_mean[:] = self._ema(self.running_mean, mean)
+        self.running_var[:] = self._ema(self.running_var, var)
+
+    def _norm(self, x):
+        a, b = x.chunk(2, dim=1)
+        a = super()._norm(a)
+        b = super()._norm(b)
+        return torch.cat([a, b], dim=1)

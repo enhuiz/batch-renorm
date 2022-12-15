@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR100
 
-from .bns import BN, BNRS, BRN
+from .bns import BN, BNRS, BRN, BRNC, BNWoS
 
 
 class Model(nn.Sequential):
@@ -54,7 +54,7 @@ def main():
     parser.add_argument("--test-batch-size", type=int, default=4096)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--test-every", type=int, default=500)
-    parser.add_argument("--log-every", type=int, default=50)
+    parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument("--dataset", type=str, default="MNIST")
     args = parser.parse_args()
 
@@ -101,10 +101,10 @@ def main():
 
     del train_ds, test_ds
 
-    Norms = [BN, BRN, BNRS]
+    Norms = [BN, BNRS, BRN, BRNC, BNWoS]
     models = [Model(in_channels, num_classes, Norm).to(args.device) for Norm in Norms]
 
-    # Eliminate the effect of normalization
+    # Eliminate the effect of initialization
     for model in models[1:]:
         model.load_state_dict(models[0].state_dict())
 
